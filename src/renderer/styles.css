@@ -278,8 +278,7 @@ body:not(.view-main) .wc-button.maximize { display: none; }
   gap: 6px;
   white-space: nowrap;
 }
-.transfer-names { flex: none; line-height: 16px; }
-.transfer-values { flex: none; line-height: 16px; }
+.transfer-names, .transfer-values { flex: none; line-height: 16px; }
 .transfer-value { min-width: 83px; text-align: center; }
 .transfer-spacer { flex: 1 1 0; }
 

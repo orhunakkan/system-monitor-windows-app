@@ -18,6 +18,7 @@ function loadStats() {
 const stats = loadStats();
 
 const RENDERER = path.join(__dirname, '..', 'renderer', 'index.html');
+const PRELOAD = path.join(__dirname, '..', 'preload.js');
 const ICON = path.join(__dirname, '..', '..', 'assets', 'icons', process.platform === 'win32' ? 'app.ico' : 'app.png');
 
 const DIALOGS = {
@@ -34,29 +35,40 @@ let settings;
 let mainWindow = null;
 const dialogs = new Map();
 
-function createMainWindow() {
-  mainWindow = new BrowserWindow({
-    title: 'System Monitor',
+// Every view is a frameless window on the same page; callers show it on ready-to-show.
+function createWindow(view, options) {
+  const win = new BrowserWindow({
     icon: ICON,
+    frame: false,
+    show: false,
+    webPreferences: { preload: PRELOAD },
+    ...options
+  });
+  win.setMenu(null);
+  win.loadFile(RENDERER, { query: { view } });
+  return win;
+}
+
+function forwardWindowState(win, events) {
+  for (const ev of events)
+    win.on(ev, () => win.webContents.send('window:state', windowState(win)));
+}
+
+function createMainWindow() {
+  mainWindow = createWindow('main', {
+    title: 'System Monitor',
     width: settings.get('window-width'),
     height: settings.get('window-height'),
     minWidth: 620,
     minHeight: 480,
-    frame: false,
-    show: false,
-    backgroundColor: '#2e2e33',
-    webPreferences: { preload: path.join(__dirname, '..', 'preload.js') }
+    backgroundColor: '#2e2e33'
   });
-  mainWindow.setMenu(null);
-  mainWindow.loadFile(RENDERER, { query: { view: 'main' } });
   mainWindow.once('ready-to-show', () => {
     if (settings.get('maximized'))
       mainWindow.maximize();
     mainWindow.show();
   });
-  const sendState = () => mainWindow.webContents.send('window:state', windowState(mainWindow));
-  for (const ev of ['maximize', 'unmaximize', 'focus', 'blur'])
-    mainWindow.on(ev, sendState);
+  forwardWindowState(mainWindow, ['maximize', 'unmaximize', 'focus', 'blur']);
   mainWindow.on('close', () => {
     settings.set('maximized', mainWindow.isMaximized());
     if (!mainWindow.isMaximized()) {
@@ -83,28 +95,21 @@ function openDialog(name) {
     dialogs.get(name).focus();
     return;
   }
-  const win = new BrowserWindow({
+  const win = createWindow(name, {
     title: spec.title,
-    icon: ICON,
     parent: mainWindow,
     modal: true,
     width: spec.width,
     height: spec.height,
     minWidth: 360,
     minHeight: 200,
-    frame: false,
-    show: false,
     resizable: name === 'preferences',
     minimizable: false,
     maximizable: false,
-    backgroundColor: name === 'preferences' ? '#2e2e33' : '#383838',
-    webPreferences: { preload: path.join(__dirname, '..', 'preload.js') }
+    backgroundColor: name === 'preferences' ? '#2e2e33' : '#383838'
   });
-  win.setMenu(null);
-  win.loadFile(RENDERER, { query: { view: name } });
   win.once('ready-to-show', () => win.show());
-  for (const ev of ['focus', 'blur'])
-    win.on(ev, () => win.webContents.send('window:state', windowState(win)));
+  forwardWindowState(win, ['focus', 'blur']);
   win.on('closed', () => dialogs.delete(name));
   dialogs.set(name, win);
 }
@@ -145,11 +150,11 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized())
-        mainWindow.restore();
-      mainWindow.focus();
-    }
+    if (!mainWindow)
+      return;
+    if (mainWindow.isMinimized())
+      mainWindow.restore();
+    mainWindow.focus();
   });
   app.whenReady().then(() => {
     if (process.platform === 'win32')

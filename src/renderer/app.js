@@ -25,6 +25,7 @@ function setupWindowChrome() {
 // ---------------------------------------------------------------- main view
 
 const RES = {};
+const colorButtons = [];
 
 function buildHeader() {
   const title = document.querySelector('.headerbar-title');
@@ -83,10 +84,14 @@ function pickColor(button, settingKey, index) {
   });
 }
 
+function settingColor(cfg, settingKey, index) {
+  return index === undefined ? cfg[settingKey] : cfg[settingKey][index];
+}
+
 function colorButton(type, settingKey, title, index) {
-  const color = index === undefined ? config[settingKey] : config[settingKey][index];
-  const button = new ColorButton(type, color, title, (b) => pickColor(b, settingKey, index));
-  button.title = title;
+  const button = new ColorButton(type, settingColor(config, settingKey, index), title,
+    (b) => pickColor(b, settingKey, index));
+  colorButtons.push({ button, settingKey, index });
   return button;
 }
 
@@ -222,9 +227,9 @@ function applySample(s) {
     return;
   const dt = Math.max(1e-3, (s.time - prev.time) / 1000);
   updateCpu(s, prev);
-  updateTransfer(RES.graphs.net, RES.net, s.net.in, s.net.out, prev.net.in, prev.net.out, dt,
+  updateTransfer(RES.graphs.net, RES.net, [s.net.in, s.net.out], [prev.net.in, prev.net.out], dt,
     config['network-in-bits'], config['network-total-in-bits']);
-  updateTransfer(RES.graphs.disk, RES.disk, s.disk.read, s.disk.write, prev.disk.read, prev.disk.write, dt,
+  updateTransfer(RES.graphs.disk, RES.disk, [s.disk.read, s.disk.write], [prev.disk.read, prev.disk.write], dt,
     false, false);
 }
 
@@ -247,13 +252,13 @@ function updateCpu(s, prev) {
 function updateMemory(s) {
   const iec = config['resources-memory-in-iec'];
   const fm = (v) => Format.formatMemory(v, iec);
-  const mem = s.mem;
+  const { mem, swap } = s;
   const memFrac = mem.total ? mem.used / mem.total : 0;
-  const swapFrac = s.swap.total ? s.swap.used / s.swap.total : 0;
+  const swapFrac = swap.total ? swap.used / swap.total : 0;
   RES.memInfo.textContent =
     `${fm(mem.used)} (${(memFrac * 100).toFixed(1)}%) of ${fm(mem.total)}\nCache ${fm(mem.cache)}`;
-  RES.swapInfo.textContent = s.swap.total
-    ? `${fm(s.swap.used)} (${(swapFrac * 100).toFixed(1)}%) of ${fm(s.swap.total)}`
+  RES.swapInfo.textContent = swap.total
+    ? `${fm(swap.used)} (${(swapFrac * 100).toFixed(1)}%) of ${fm(swap.total)}`
     : 'not available';
   RES.memPie.setFraction(memFrac);
   RES.swapPie.setFraction(swapFrac);
@@ -261,25 +266,20 @@ function updateMemory(s) {
   g.pushRow([g.logPartial(memFrac), g.logPartial(swapFrac)]);
 }
 
-function updateTransfer(graph, sides, a, b, pa, pb, dt, rateBits, totalBits) {
-  const ra = Math.max(0, (a - pa) / dt);
-  const rb = Math.max(0, (b - pb) / dt);
-  graph.pushRow([ra / graph.max, rb / graph.max]);
-  graph.rescale(Math.max(ra, rb));
-  sides[0].rate.textContent = Format.formatRate(ra, rateBits);
-  sides[1].rate.textContent = Format.formatRate(rb, rateBits);
-  sides[0].total.textContent = Format.formatSize(a, totalBits);
-  sides[1].total.textContent = Format.formatSize(b, totalBits);
+// totals and prevTotals hold the cumulative byte counters for each side.
+function updateTransfer(graph, sides, totals, prevTotals, dt, rateBits, totalBits) {
+  const rates = totals.map((total, i) => Math.max(0, (total - prevTotals[i]) / dt));
+  graph.pushRow(rates.map((rate) => rate / graph.max));
+  graph.rescale(Math.max(...rates));
+  sides.forEach((side, i) => {
+    side.rate.textContent = Format.formatRate(rates[i], rateBits);
+    side.total.textContent = Format.formatSize(totals[i], totalBits);
+  });
 }
 
 function applyConfigToMain(old, next) {
-  RES.cpuButtons.forEach((b, i) => b.setColor(next['cpu-colors'][i]));
-  RES.memPie.setColor(next['mem-color']);
-  RES.swapPie.setColor(next['swap-color']);
-  RES.net[0].button.setColor(next['net-in-color']);
-  RES.net[1].button.setColor(next['net-out-color']);
-  RES.disk[0].button.setColor(next['disk-read-color']);
-  RES.disk[1].button.setColor(next['disk-write-color']);
+  for (const { button, settingKey, index } of colorButtons)
+    button.setColor(settingColor(next, settingKey, index));
   if (old['graph-update-interval'] !== next['graph-update-interval'])
     startClock();
   if (old['graph-data-points'] !== next['graph-data-points'])
