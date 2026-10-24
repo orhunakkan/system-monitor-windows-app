@@ -41,6 +41,10 @@ as `resources/koffi/win32_x64/koffi.node` so the installer can be built on any h
 To refresh it after a koffi upgrade, run
 `npm install --os=win32 --cpu=x64` and copy `node_modules/@koromix/koffi-win32-x64`.
 
+Working on the code (human or agent)? Start with [AGENTS.md](AGENTS.md): layout, traps
+(such as `ELECTRON_RUN_AS_NODE` in VS Code terminals) and how to verify visual changes
+against [the reference capture](docs/reference/gsm-resources@2x.png) using `tools/`.
+
 ## How it was derived
 
 Layout, drawing and formatting were recovered from the installed binary
