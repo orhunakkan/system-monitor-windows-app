@@ -95,11 +95,14 @@ function network() {
   const table = out[0];
   try {
     const count = koffi.decode(table, 'uint32');
-    const view = new DataView(koffi.view(table, TABLE_ROWS_OFFSET + count * ROW_SIZE));
+    // Copy the rows out: koffi.view() makes an external ArrayBuffer, which
+    // Electron's V8 memory cage rejects with an uncatchable fatal error.
+    const bytes = koffi.decode(table, TABLE_ROWS_OFFSET, 'uint8', count * ROW_SIZE);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     let rx = 0;
     let tx = 0;
     for (let i = 0; i < count; i++) {
-      const row = TABLE_ROWS_OFFSET + i * ROW_SIZE;
+      const row = i * ROW_SIZE;
       if (view.getUint32(row + OFF_TYPE, true) === IF_TYPE_SOFTWARE_LOOPBACK)
         continue;
       if (view.getUint8(row + OFF_FLAGS) & FLAG_FILTER_INTERFACE)

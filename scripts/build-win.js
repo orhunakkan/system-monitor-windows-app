@@ -11,8 +11,12 @@ delete env.ELECTRON_RUN_AS_NODE;
 if (process.platform !== 'win32' && !hasWine())
   env.PATH = `${path.join(__dirname, 'wine-shim')}${path.delimiter}${env.PATH}`;
 
-const builder = path.join(__dirname, '..', 'node_modules', '.bin', 'electron-builder');
-const result = spawnSync(builder, ['--win', 'nsis', '--x64'], { stdio: 'inherit', env });
+// Run the CLI through node: on Windows .bin/electron-builder is a shell script
+// that spawnSync cannot execute.
+const builder = require.resolve('electron-builder/cli.js');
+const result = spawnSync(process.execPath, [builder, '--win', 'nsis', '--x64'], { stdio: 'inherit', env });
+if (result.error)
+  console.error('electron-builder failed to start:', result.error.message);
 process.exit(result.status === null ? 1 : result.status);
 
 function hasWine() {

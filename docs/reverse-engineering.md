@@ -130,7 +130,7 @@ raw sRGB; Chromium colour-manages and desaturated the colours (#e01b24 came out 
 `main.js` passes `--force-color-profile=srgb` so colours match on calibrated displays,
 including Windows machines with display profiles.
 
-## Windows data sources (`src/main/stats/win32.js`): not yet run on Windows
+## Windows data sources (`src/main/stats/win32.js`)
 
 | Section | API | Notes |
 | --- | --- | --- |
@@ -141,5 +141,12 @@ including Windows machines with display profiles.
 | Disk | `IOCTL_DISK_PERFORMANCE` on `\\.\PhysicalDriveN` | handle opened with access 0; rescanned every 10 s |
 
 Struct layouts are checked by `tools/check-win32-layout.js` (MIB_IF_ROW2 = 1352 bytes,
-InOctets at 1208, OutOctets at 1280). The behaviour of these calls on real Windows is still
-unverified; that is the top open item.
+InOctets at 1208, OutOctets at 1280). Verified on Windows 11 (28 logical CPUs, two NVMe
+disks) against `Get-Counter`, `Win32_OperatingSystem`, `Win32_PageFileUsage` and
+`Get-NetAdapterStatistics`: per-core CPU, RAM, page file size, and adapter octets agree.
+Cache (SystemCache) is Task Manager's "Cached" (standby + modified), not the `Cache Bytes`
+counter. CPU readings step in 1/64 (15.6 ms clock ticks over a 1 s sample).
+
+`GetIfTable2` rows are copied out with `koffi.decode(ptr, offset, 'uint8', len)`.
+`koffi.view()` returns an external ArrayBuffer, which Electron's V8 memory cage rejects
+with a fatal, uncatchable abort of the main process (it works in plain Node).

@@ -67,6 +67,10 @@ env -u ELECTRON_RUN_AS_NODE npm run dist:win   # dist/System-Monitor-Setup-<vers
   `const` breaks the page with a blank window.
 - **Colours may be GDK 12-digit strings** (`#rrrrggggbbbb`). Use `ColorButton.css`, not the
   raw setting, for canvas styles.
+- **Never use `koffi.view()` in the main process.** Electron's V8 memory cage forbids
+  external ArrayBuffers and the process aborts (no exception, so `guarded()` can't catch
+  it). Copy native memory with `koffi.decode(ptr, offset, 'uint8', len)` instead. Test
+  native code under Electron (`ELECTRON_RUN_AS_NODE=1 electron script.js`), not plain Node.
 - **Focus changes the look.** Unfocused windows get Mint's backdrop style (grey close
   button, dimmed header). Captures taken while another window has focus show this.
 - The installer is ~113 MB and over GitHub's 100 MB file limit. Never commit `dist/`;
@@ -91,10 +95,11 @@ env -u ELECTRON_RUN_AS_NODE npm run dist:win   # dist/System-Monitor-Setup-<vers
 
 ## Open items
 
-- **Windows sampling has never run on Windows.** Install on a real machine and confirm
-  that each section updates and that totals look right compared with Task Manager. If a
-  call fails, `win32.js` logs `System Monitor: <section> sampling failed` once and shows
-  zeros.
+- **The installer has not been run.** The app has been verified on Windows 11 from
+  source and from `dist/win-unpacked` (all sections match Windows counters), but the
+  NSIS install/uninstall flow, shortcuts and the installed app are still untested. If a
+  sampling call fails, `win32.js` logs `System Monitor: <section> sampling failed` once
+  and shows zeros.
 - The installer is unsigned (SmartScreen warns).
 - At 2× scaling, GSM's axis labels show subpixel colour fringes; the port's labels are
   greyscale. This is a cosmetic difference that was accepted.
