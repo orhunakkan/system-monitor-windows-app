@@ -14,6 +14,7 @@ const DEFAULTS = {
   'window-width': 700,
   'window-height': 500,
   'maximized': false,
+  'start-at-login': false,
   'graph-update-interval': 100,
   'graph-data-points': 60,
   'cpu-smooth-graph': true,

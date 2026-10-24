@@ -1,7 +1,7 @@
 'use strict';
 
 const path = require('path');
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Menu, Tray, ipcMain, shell } = require('electron');
 const { Settings } = require('./settings');
 
 function loadStats() {
@@ -20,6 +20,10 @@ const stats = loadStats();
 const RENDERER = path.join(__dirname, '..', 'renderer', 'index.html');
 const PRELOAD = path.join(__dirname, '..', 'preload.js');
 const ICON = path.join(__dirname, '..', '..', 'assets', 'icons', process.platform === 'win32' ? 'app.ico' : 'app.png');
+// Also the registry value name of the login item; build/installer.nsh removes it on uninstall.
+const APP_ID = 'io.github.orhunakkan.SystemMonitorResources';
+// Passed by the login item so the app starts in the tray.
+const HIDDEN_ARG = '--hidden';
 
 const DIALOGS = {
   preferences: { title: 'Preferences', width: 700, height: 700 },
@@ -33,15 +37,17 @@ app.commandLine.appendSwitch('force-color-profile', 'srgb');
 
 let settings;
 let mainWindow = null;
+let tray = null;                  // held so the tray icon is not garbage-collected
+let quitting = false;
 const dialogs = new Map();
 
 // Every view is a frameless window on the same page; callers show it on ready-to-show.
-function createWindow(view, options) {
+function createWindow(view, { webPreferences, ...options }) {
   const win = new BrowserWindow({
     icon: ICON,
     frame: false,
     show: false,
-    webPreferences: { preload: PRELOAD },
+    webPreferences: { preload: PRELOAD, ...webPreferences },
     ...options
   });
   win.setMenu(null);
@@ -61,30 +67,80 @@ function createMainWindow() {
     height: settings.get('window-height'),
     minWidth: 620,
     minHeight: 480,
-    backgroundColor: '#2e2e33'
+    backgroundColor: '#2e2e33',
+    // Keep sampling at full rate while hidden in the tray, so the graphs have history.
+    webPreferences: { backgroundThrottling: false }
   });
   mainWindow.once('ready-to-show', () => {
-    if (settings.get('maximized'))
-      mainWindow.maximize();
-    mainWindow.show();
+    if (!process.argv.includes(HIDDEN_ARG))
+      showMainWindow();
   });
-  forwardWindowState(mainWindow, ['maximize', 'unmaximize', 'focus', 'blur']);
-  mainWindow.on('close', () => {
+  forwardWindowState(mainWindow,
+    ['maximize', 'unmaximize', 'focus', 'blur', 'show', 'hide', 'minimize', 'restore']);
+  // Closing hides to the tray; only Quit (tray menu, Ctrl+Q) exits.
+  mainWindow.on('close', (e) => {
     settings.set('maximized', mainWindow.isMaximized());
     if (!mainWindow.isMaximized()) {
       const [w, h] = mainWindow.getSize();
       settings.set('window-width', w);
       settings.set('window-height', h);
     }
+    if (quitting)
+      return;
+    e.preventDefault();
+    mainWindow.hide();
   });
+  // Sign-out or shutdown: let the window close instead of hiding.
+  mainWindow.on('session-end', () => { quitting = true; });
   mainWindow.on('closed', () => {
     mainWindow = null;
     app.quit();
   });
 }
 
+function showMainWindow() {
+  if (!mainWindow)
+    return;
+  // A window started in the tray has never been shown; maximize() also shows it.
+  if (!mainWindow.isVisible() && settings.get('maximized') && !mainWindow.isMaximized())
+    mainWindow.maximize();
+  if (mainWindow.isMinimized())
+    mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function createTray() {
+  tray = new Tray(ICON);
+  tray.setToolTip('System Monitor');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Show System Monitor', click: showMainWindow },
+    { type: 'separator' },
+    { label: 'Quit', click: () => app.quit() }
+  ]));
+  tray.on('click', showMainWindow);
+}
+
+// Windows only: registers HKCU\...\Run\<APP_ID>.
+function applyLoginItem() {
+  if (process.platform !== 'win32')
+    return;
+  // Run from source, electron.exe needs the app path before our own flag.
+  const args = app.isPackaged ? [HIDDEN_ARG] : [app.getAppPath(), HIDDEN_ARG];
+  app.setLoginItemSettings({
+    openAtLogin: settings.get('start-at-login'),
+    name: APP_ID,
+    path: process.execPath,
+    args
+  });
+}
+
 function windowState(win) {
-  return { maximized: win.isMaximized(), focused: win.isFocused() };
+  return {
+    maximized: win.isMaximized(),
+    focused: win.isFocused(),
+    visible: win.isVisible() && !win.isMinimized()
+  };
 }
 
 function openDialog(name) {
@@ -123,8 +179,11 @@ function registerIpc() {
   ipcMain.handle('stats:sample', () => stats.sample());
   ipcMain.handle('settings:all', () => settings.all());
   ipcMain.handle('settings:set', (_e, key, value) => {
-    if (settings.set(key, value))
-      broadcastSettings();
+    if (!settings.set(key, value))
+      return;
+    if (key === 'start-at-login')
+      applyLoginItem();
+    broadcastSettings();
   });
   ipcMain.on('window:action', (e, action) => {
     const win = BrowserWindow.fromWebContents(e.sender);
@@ -149,20 +208,22 @@ function registerIpc() {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    if (!mainWindow)
-      return;
-    if (mainWindow.isMinimized())
-      mainWindow.restore();
-    mainWindow.focus();
+  app.on('second-instance', (_e, argv) => {
+    if (!argv.includes(HIDDEN_ARG))
+      showMainWindow();
   });
   app.whenReady().then(() => {
     if (process.platform === 'win32')
-      app.setAppUserModelId('io.github.orhunakkan.SystemMonitorResources');
+      app.setAppUserModelId(APP_ID);
     settings = new Settings(app.getPath('userData'));
     settings.ensureCpuColors(stats.sample().cpu.length);
+    // Re-register so the Run entry follows the setting after a reinstall or move.
+    if (app.isPackaged)
+      applyLoginItem();
     registerIpc();
     createMainWindow();
+    createTray();
   });
+  app.on('before-quit', () => { quitting = true; });
   app.on('window-all-closed', () => app.quit());
 }

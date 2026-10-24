@@ -21,6 +21,10 @@ unsigned, so SmartScreen may ask you to confirm ("More info" → "Run anyway").
 - Preferences (Ctrl+,): update interval, chart data points, smooth graphs, stacked CPU,
   IEC units, logarithmic memory scale, network bits. Settings are stored in
   `%APPDATA%\System Monitor\settings.json`.
+- Closing the window hides it to the system tray; graphs keep recording. Click the tray
+  icon to reopen it, and use the tray menu's Quit (or Ctrl+Q) to exit.
+- **Start at Login** (Preferences → Behavior) launches it into the tray when you sign in
+  to Windows. The uninstaller removes the startup entry.
 - Click any swatch, pie or arrow to change that graph's color.
 - Shortcuts: F10 menu, Ctrl+, preferences, Ctrl+? shortcuts, Ctrl+Q quit.
 

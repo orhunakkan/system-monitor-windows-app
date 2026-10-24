@@ -4,6 +4,9 @@ const { el } = Widgets;
 const view = new URLSearchParams(location.search).get('view') || 'main';
 let config = null;
 const settingsListeners = [];
+// The main window runs unthrottled, so a window hidden in the tray still reports
+// document.visibilityState 'visible'; track it from the window state instead.
+let windowVisible = true;
 
 function onSettingsChanged(fn) {
   settingsListeners.push(fn);
@@ -12,7 +15,8 @@ function onSettingsChanged(fn) {
 function setupWindowChrome() {
   for (const button of document.querySelectorAll('.wc-button'))
     button.addEventListener('click', () => sysmon.windowAction(button.dataset.action));
-  const apply = ({ maximized, focused }) => {
+  const apply = ({ maximized, focused, visible }) => {
+    windowVisible = visible;
     document.body.classList.toggle('maximized', maximized);
     document.body.classList.toggle('backdrop', !focused);
     const max = document.querySelector('.wc-button.maximize');
@@ -215,7 +219,8 @@ function tick() {
   clock.counter = (clock.counter + 1) % FRAMES_PER_UNIT;
   for (const g of Object.values(RES.graphs)) {
     g.renderCounter = clock.counter;
-    g.queueDraw();
+    if (windowVisible)
+      g.queueDraw();
   }
 }
 

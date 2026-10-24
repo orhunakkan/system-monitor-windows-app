@@ -182,6 +182,8 @@
     points.append(el('div', 'row-title', 'Chart Data Points'), scale.el);
     behavior.append(points);
     switchRow(behavior, 'Draw Charts as Smooth Graphs', 'cpu-smooth-graph');
+    if (sysmon.platform === 'win32')
+      switchRow(behavior, 'Start at Login', 'start-at-login');
 
     switchRow(group(page, 'CPU'), 'Draw CPU Chart as Stacked Area Chart', 'cpu-stacked-area-chart');
     const mem = group(page, 'Memory and Swap');

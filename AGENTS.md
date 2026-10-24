@@ -14,7 +14,8 @@ rendering or layout. Many details that look odd are copied on purpose, for examp
 ## Layout
 
 ```
-src/main/main.js            Electron main: frameless windows, IPC, single instance, dialogs
+src/main/main.js            Electron main: frameless windows, IPC, single instance, dialogs,
+                            tray (close hides), Start at Login (--hidden)
 src/main/settings.js        settings.json (gsettings keys/defaults), CPU colour generation
 src/main/stats/win32.js     Windows sampler (koffi → kernel32/ntdll/iphlpapi), per-section try/catch
 src/main/stats/win32-structs.js  koffi struct layouts (no DLL loading; testable anywhere)
@@ -30,6 +31,7 @@ src/renderer/dialogs.js     popover menu, colour chooser, preferences, shortcuts
 src/renderer/widgets.js     switch, spin button, scale
 src/renderer/styles.css     Mint-Y-Dark-Aqua libadwaita look
 build/vendor/koffi-win32-x64  Windows koffi.node, shipped via extraResources
+build/installer.nsh         NSIS uninstall hook: removes the Start at Login Run entry
 scripts/build-win.js        installer build; scripts/wine-shim/wine replaces wine on Linux
 scripts/make-icons.js       app.svg → build/icon.ico + assets/icons/app.{ico,png}
 tools/                      verification tools (see below)
@@ -71,6 +73,12 @@ env -u ELECTRON_RUN_AS_NODE npm run dist:win   # dist/System-Monitor-Setup-<vers
   external ArrayBuffers and the process aborts (no exception, so `guarded()` can't catch
   it). Copy native memory with `koffi.decode(ptr, offset, 'uint8', len)` instead. Test
   native code under Electron (`ELECTRON_RUN_AS_NODE=1 electron script.js`), not plain Node.
+- **The main window runs with `backgroundThrottling: false`** so graphs keep recording
+  while it sits hidden in the tray. The page then always reports itself visible, so
+  `app.js` skips drawing based on the `visible` field of the window state instead.
+- **Start at Login writes `HKCU\...\Run\io.github.orhunakkan.SystemMonitorResources`.**
+  Toggling it from a source run registers `electron.exe <repo>`, which replaces an
+  installed copy's entry. Turn it off again after testing.
 - **Focus changes the look.** Unfocused windows get Mint's backdrop style (grey close
   button, dimmed header). Captures taken while another window has focus show this.
 - The installer is ~113 MB and over GitHub's 100 MB file limit. Never commit `dist/`;
