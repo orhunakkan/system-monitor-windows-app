@@ -1,0 +1,26 @@
+#!/usr/bin/env node
+'use strict';
+
+// Build-time stand-in for `wine`, used only by scripts/build-win.js on Linux.
+// electron-builder runs the NSIS "uninstaller generator" under wine just to
+// obtain the uninstaller executable. On macOS it extracts that executable
+// with its own UninstallerReader instead; this shim does the same here.
+
+const path = require('path');
+
+const installer = process.argv[2];
+if (process.argv.length !== 3 || !/\.exe$/i.test(installer || '')) {
+  console.error(`wine shim: unsupported invocation: ${process.argv.slice(2).join(' ')}`);
+  process.exit(1);
+}
+
+const { UninstallerReader } = require(path.join(__dirname, '..', '..', 'node_modules',
+  'app-builder-lib', 'out', 'targets', 'nsis', 'nsisUtil.js'));
+
+// Mirrors NsisTarget: path.join(outDir, `${path.basename(installerPath, "exe")}__uninstaller.exe`)
+const uninstaller = path.join(path.dirname(installer), `${path.basename(installer, 'exe')}__uninstaller.exe`);
+
+UninstallerReader.exec(installer, uninstaller).catch((err) => {
+  console.error(`wine shim: ${err.message}`);
+  process.exit(1);
+});
