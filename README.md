@@ -59,6 +59,6 @@ original.
 
 GPL-2.0-or-later (see `LICENSE`), as a derivative of
 [GNOME System Monitor](https://apps.gnome.org/SystemMonitor/).
-Arrow pixmaps and the app icon come from GNOME System Monitor, symbolic icons from the
+Arrow pixmaps come from GNOME System Monitor, symbolic icons from the
 Adwaita, Mint-Y and Yaru icon themes, and fonts from the Ubuntu Font Family
 (Ubuntu Font Licence 1.0).
